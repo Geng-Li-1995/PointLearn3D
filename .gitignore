@@ -1,0 +1,3 @@
+# Generated dataset caches (data/shape/, data/scene/)
+data/*
+!data/.gitkeep
