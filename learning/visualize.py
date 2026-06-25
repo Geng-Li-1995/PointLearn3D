@@ -30,7 +30,7 @@ from learning.plot_set import (
 from simulation.generation import SceneGenerator, ShapeGenerator
 
 # Shared 3D PNG export style (shape + scene)
-PLOT_POINT_SIZE = 1.2
+PLOT_POINT_SIZE = 2.0
 PLOT_ALPHA = 0.9
 PLOT_DPI = 150
 

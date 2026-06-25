@@ -99,6 +99,42 @@ If `prepare_data` and `train` run in the same invocation, training automatically
 - **`ShapeGenerator`** — one primitive per sample, global class label  
 - **`SceneGenerator`** — ~12 objects per scene, per-point segmentation labels  
 
+### Dataset scale (defaults)
+
+Values below match **`config/input.py`** out of the box. Override any field before running `python main.py`.
+
+| | Shape (`train_shape`) | Scene (`train_scene`) |
+|---|----------------------|------------------------|
+| **Samples** | 3,000 | 1,000 |
+| **Points per sample** | 1,024 | 4,096 |
+| **Total labeled points** | ~3.1M | ~4.1M |
+| **Label type** | 1 class per cloud | 1 class per point |
+| **Classes** | 3 (cuboid / cylinder / sphere) | same 3 classes |
+| **Batch size** | 16 | 4 |
+| **Batches / epoch** | 187 | 250 |
+| **Default epochs** | 30 | 20 |
+| **Cache file** | `data/shape/dataset.npz` | `data/scene/dataset.npz` |
+
+**Per-sample content**
+
+| | Shape | Scene |
+|---|-------|-------|
+| Geometry | 1 random cuboid, cylinder, or sphere | ~12 objects (3–5 cuboids, 3–5 cylinders, remainder spheres) |
+| Raw points / object | resampled to 1,024 | ~600 surface points / object, merged then resampled to 4,096 |
+| Placement | Random SE(3) transform | Voxel collision-free layout in \(x,y \in [-10,10]\), \(z \in [-0.1,0.1]\) |
+| Class balance | Uniform over 3 shapes | Per-point labels from object type |
+
+**Training throughput (defaults, cached data)**
+
+| | Shape | Scene |
+|---|-------|-------|
+| Optimizer | Adam, `lr=1e-3`, `weight_decay=1e-5` | same |
+| Early stopping | patience 5, `min_delta=1e-4` | same |
+| `preload_workers=0` | all CPU cores when building cache | same |
+| `num_workers=0` | DataLoader uses `cpu_count − 1` (0 when reading cache) | same |
+
+Set `regen=True` to rebuild caches after changing `num_samples_*` or `num_points_*`. A mismatch between cache and config triggers an automatic rebuild.
+
 ### Models (`learning/train.py`)
 
 | Task | Switch | Model | Input | Output weights | Log key |
