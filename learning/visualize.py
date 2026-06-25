@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib import image as mpimg
 import numpy as np
 import open3d as o3d
 
@@ -29,6 +28,12 @@ from learning.plot_set import (
     style_axes,
 )
 from simulation.generation import SceneGenerator, ShapeGenerator
+
+# Shared 3D PNG export style (shape + scene)
+PLOT_POINT_SIZE = 1.2
+PLOT_ALPHA = 0.9
+PLOT_DPI = 150
+
 
 def _create_pcd(points, color=DEFAULT_COLOR):
     pcd = o3d.geometry.PointCloud()
@@ -58,74 +63,48 @@ def _set_scene_view(ax, points: np.ndarray, pad: float = 0.06) -> None:
         ax.set_box_aspect(tuple(spans))
 
 
-def _crop_white_margins(path: Path, pad_px: int = 10, thresh: float = 0.97) -> None:
-    """Trim near-white borders from a saved PNG (matplotlib 3D leaves large margins)."""
-    data = mpimg.imread(path)
-    rgb = data[..., :3] if data.ndim == 3 else data
-    content = np.any(rgb < thresh, axis=-1)
-    if not content.any():
-        return
-    rows = np.where(content.any(axis=1))[0]
-    cols = np.where(content.any(axis=0))[0]
-    r0, r1 = max(0, rows[0] - pad_px), min(data.shape[0], rows[-1] + pad_px + 1)
-    c0, c1 = max(0, cols[0] - pad_px), min(data.shape[1], cols[-1] + pad_px + 1)
-    mpimg.imsave(path, data[r0:r1, c0:c1])
-
-
-def _plot_point_cloud(ax, points: np.ndarray, color: tuple[float, float, float], size: float = 1.0):
+def _scatter_points(ax, points: np.ndarray, color: tuple[float, float, float]) -> None:
     color_arr = np.broadcast_to(color, (len(points), 3))
-    ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=color_arr, s=size, linewidths=0, alpha=0.9)
-    _set_equal_aspect(ax, points)
+    ax.scatter(
+        points[:, 0], points[:, 1], points[:, 2],
+        c=color_arr, s=PLOT_POINT_SIZE, linewidths=0, alpha=PLOT_ALPHA,
+    )
 
 
-def _save_3d_figure(fig, ax, path: Path, dpi: int, *, top: float = 0.92) -> None:
-    """Tight export for 3D axes (matplotlib leaves large margins by default)."""
-    ax.set_position([0, 0, 1, top])
-    fig.subplots_adjust(left=0, right=1, bottom=0, top=top)
-    fig.savefig(path, dpi=dpi, bbox_inches="tight", pad_inches=0.02, facecolor="white")
-
-
-def save_scene_plot(objects, path: str | Path, title: str | None = None, dpi: int = 150) -> None:
+def save_scene_plot(objects, path: str | Path, title: str | None = None, dpi: int = PLOT_DPI) -> None:
     """Save a single scene as a PNG."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig = plt.figure(figsize=(5, 5), facecolor="white")
-    ax = fig.add_axes([0, 0, 1, 1], projection="3d")
+    fig = plt.figure(figsize=(8, 8))
+    ax = fig.add_subplot(111, projection="3d")
     all_points = []
     for obj in objects:
-        color_arr = np.broadcast_to(CLASS_COLORS.get(obj.label, DEFAULT_COLOR), (len(obj.points), 3))
-        ax.scatter(
-            obj.points[:, 0], obj.points[:, 1], obj.points[:, 2],
-            c=color_arr, s=1.2, linewidths=0, alpha=0.9,
-        )
+        _scatter_points(ax, obj.points, CLASS_COLORS.get(obj.label, DEFAULT_COLOR))
         all_points.append(obj.points)
     if all_points:
         _set_scene_view(ax, np.concatenate(all_points, axis=0))
-    if hasattr(ax, "set_proj_type"):
-        ax.set_proj_type("ortho")
-    ax.view_init(elev=28, azim=-58)
+    ax.view_init(elev=25, azim=-60)
     ax.set_axis_off()
-    ax.dist = 4
     if title:
-        ax.text2D(0.5, 0.97, title, transform=ax.transAxes, ha="center", va="top", fontsize=9)
-    fig.savefig(path, dpi=dpi, facecolor="white", edgecolor="none", pad_inches=0)
+        ax.set_title(title, fontsize=12, pad=12)
+    fig.savefig(path, dpi=dpi, bbox_inches="tight", facecolor="white")
     plt.close(fig)
-    _crop_white_margins(path, pad_px=6)
 
 
-def save_shape_plot(points: np.ndarray, label: int, path: str | Path, title: str | None = None, dpi: int = 150):
+def save_shape_plot(points: np.ndarray, label: int, path: str | Path, title: str | None = None, dpi: int = PLOT_DPI):
     """Save a single shape point cloud as a PNG."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig = plt.figure(figsize=(6, 6))
+    fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(111, projection="3d")
-    _plot_point_cloud(ax, points, CLASS_COLORS.get(label, DEFAULT_COLOR), size=2.0)
-    ax.view_init(elev=20, azim=-65)
-    ax.set_axis_off()
+    _scatter_points(ax, points, CLASS_COLORS.get(label, DEFAULT_COLOR))
+    _set_equal_aspect(ax, points)
     if hasattr(ax, "set_box_aspect"):
         ax.set_box_aspect((1, 1, 1))
-    ax.set_title(title or SHAPE_CLASS_NAMES.get(label, "unknown"), fontsize=11, pad=4)
-    _save_3d_figure(fig, ax, path, dpi, top=0.90)
+    ax.view_init(elev=20, azim=-65)
+    ax.set_axis_off()
+    ax.set_title(title or SHAPE_CLASS_NAMES.get(label, "unknown"), fontsize=12, pad=12)
+    fig.savefig(path, dpi=dpi, bbox_inches="tight", facecolor="white")
     plt.close(fig)
 
 
