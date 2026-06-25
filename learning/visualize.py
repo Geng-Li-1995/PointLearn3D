@@ -36,36 +36,65 @@ def _create_pcd(points, color=DEFAULT_COLOR):
     return pcd
 
 
-def _set_equal_aspect(ax, points: np.ndarray) -> None:
+def _set_equal_aspect(ax, points: np.ndarray, pad: float = 0.05) -> None:
+    """Cube limits from max radial extent (good for single shapes)."""
     center = points.mean(axis=0)
     radius = max(np.max(np.linalg.norm(points - center, axis=1)), 1e-3)
+    radius *= 1 + pad
     for axis, c in zip("xyz", center):
         getattr(ax, f"set_{axis}lim")(c - radius, c + radius)
 
 
-def _plot_point_cloud(ax, points: np.ndarray, color: tuple[float, float, float], size: float = 1.0):
+def _set_tight_aspect(ax, points: np.ndarray, pad: float = 0.08) -> None:
+    """Per-axis limits from data bounds (good for flat multi-object scenes)."""
+    mins = points.min(axis=0)
+    maxs = points.max(axis=0)
+    margin = np.maximum((maxs - mins) * pad, 0.05)
+    for i, axis in enumerate("xyz"):
+        getattr(ax, f"set_{axis}lim")(mins[i] - margin[i], maxs[i] + margin[i])
+
+
+def _plot_point_cloud(
+    ax, points: np.ndarray, color: tuple[float, float, float], size: float = 1.0, *, tight: bool = False,
+):
     color_arr = np.broadcast_to(color, (len(points), 3))
     ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=color_arr, s=size, linewidths=0, alpha=0.9)
-    _set_equal_aspect(ax, points)
+    if tight:
+        _set_tight_aspect(ax, points)
+    else:
+        _set_equal_aspect(ax, points)
+
+
+def _save_3d_figure(fig, ax, path: Path, dpi: int, *, top: float = 0.92) -> None:
+    """Tight export for 3D axes (matplotlib leaves large margins by default)."""
+    ax.set_position([0, 0, 1, top])
+    fig.subplots_adjust(left=0, right=1, bottom=0, top=top)
+    fig.savefig(path, dpi=dpi, bbox_inches="tight", pad_inches=0.02, facecolor="white")
 
 
 def save_scene_plot(objects, path: str | Path, title: str | None = None, dpi: int = 150) -> None:
     """Save a single scene as a PNG."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig = plt.figure(figsize=(8, 8))
+    fig = plt.figure(figsize=(6, 6))
     ax = fig.add_subplot(111, projection="3d")
     all_points = []
     for obj in objects:
-        _plot_point_cloud(ax, obj.points, CLASS_COLORS.get(obj.label, DEFAULT_COLOR))
+        color_arr = np.broadcast_to(CLASS_COLORS.get(obj.label, DEFAULT_COLOR), (len(obj.points), 3))
+        ax.scatter(
+            obj.points[:, 0], obj.points[:, 1], obj.points[:, 2],
+            c=color_arr, s=1.0, linewidths=0, alpha=0.9,
+        )
         all_points.append(obj.points)
     if all_points:
-        _set_equal_aspect(ax, np.concatenate(all_points, axis=0))
+        _set_tight_aspect(ax, np.concatenate(all_points, axis=0))
     ax.view_init(elev=25, azim=-60)
     ax.set_axis_off()
     if title:
-        ax.set_title(title, fontsize=12, pad=12)
-    fig.savefig(path, dpi=dpi, bbox_inches="tight", facecolor="white")
+        ax.set_title(title, fontsize=11, pad=4)
+        _save_3d_figure(fig, ax, path, dpi, top=0.90)
+    else:
+        _save_3d_figure(fig, ax, path, dpi, top=1.0)
     plt.close(fig)
 
 
@@ -78,8 +107,8 @@ def save_shape_plot(points: np.ndarray, label: int, path: str | Path, title: str
     _plot_point_cloud(ax, points, CLASS_COLORS.get(label, DEFAULT_COLOR), size=2.0)
     ax.view_init(elev=20, azim=-65)
     ax.set_axis_off()
-    ax.set_title(title or SHAPE_CLASS_NAMES.get(label, "unknown"), fontsize=12, pad=12)
-    fig.savefig(path, dpi=dpi, bbox_inches="tight", facecolor="white")
+    ax.set_title(title or SHAPE_CLASS_NAMES.get(label, "unknown"), fontsize=11, pad=4)
+    _save_3d_figure(fig, ax, path, dpi, top=0.90)
     plt.close(fig)
 
 

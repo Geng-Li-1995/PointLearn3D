@@ -38,6 +38,7 @@ PointLearn3D/
 ├── data/                    # Dataset cache (git-ignored; see below)
 ├── docs/images/             # Readme figure snapshots
 ├── result/                  # Models, logs, visualization outputs
+├── tests/                   # pytest suite
 └── requirements.txt
 ```
 
@@ -60,6 +61,17 @@ All behavior is controlled in **`config/input.py`**. There is no CLI `--mode`. T
 4. Set `plot_training_curves=True` to save plots under `result/training/`
 
 **Git:** Only generated NPZ files under `data/` are ignored. Models, images, and logs under `result/` can be committed normally.
+
+### Tests
+
+```bash
+pip install -r requirements.txt
+pytest
+```
+
+Run a single file: `pytest tests/test_train.py -v`
+
+CI runs on GitHub Actions (`.github/workflows/ci.yml`) for Python 3.10–3.12 on every push/PR to `main`.
 
 ---
 
