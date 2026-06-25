@@ -30,7 +30,8 @@ from learning.plot_set import (
 from simulation.generation import SceneGenerator, ShapeGenerator
 
 # Shared 3D PNG export style (shape + scene)
-PLOT_POINT_SIZE = 2.0
+PLOT_POINT_SIZE_SHAPE = 5.0
+PLOT_POINT_SIZE_SCENE = 2.0
 PLOT_ALPHA = 0.9
 PLOT_DPI = 150
 
@@ -63,11 +64,13 @@ def _set_scene_view(ax, points: np.ndarray, pad: float = 0.06) -> None:
         ax.set_box_aspect(tuple(spans))
 
 
-def _scatter_points(ax, points: np.ndarray, color: tuple[float, float, float]) -> None:
+def _scatter_points(
+    ax, points: np.ndarray, color: tuple[float, float, float], *, size: float,
+) -> None:
     color_arr = np.broadcast_to(color, (len(points), 3))
     ax.scatter(
         points[:, 0], points[:, 1], points[:, 2],
-        c=color_arr, s=PLOT_POINT_SIZE, linewidths=0, alpha=PLOT_ALPHA,
+        c=color_arr, s=size, linewidths=0, alpha=PLOT_ALPHA,
     )
 
 
@@ -79,7 +82,7 @@ def save_scene_plot(objects, path: str | Path, title: str | None = None, dpi: in
     ax = fig.add_subplot(111, projection="3d")
     all_points = []
     for obj in objects:
-        _scatter_points(ax, obj.points, CLASS_COLORS.get(obj.label, DEFAULT_COLOR))
+        _scatter_points(ax, obj.points, CLASS_COLORS.get(obj.label, DEFAULT_COLOR), size=PLOT_POINT_SIZE_SCENE)
         all_points.append(obj.points)
     if all_points:
         _set_scene_view(ax, np.concatenate(all_points, axis=0))
@@ -97,7 +100,7 @@ def save_shape_plot(points: np.ndarray, label: int, path: str | Path, title: str
     path.parent.mkdir(parents=True, exist_ok=True)
     fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(111, projection="3d")
-    _scatter_points(ax, points, CLASS_COLORS.get(label, DEFAULT_COLOR))
+    _scatter_points(ax, points, CLASS_COLORS.get(label, DEFAULT_COLOR), size=PLOT_POINT_SIZE_SHAPE)
     _set_equal_aspect(ax, points)
     if hasattr(ax, "set_box_aspect"):
         ax.set_box_aspect((1, 1, 1))
