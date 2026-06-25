@@ -1,10 +1,12 @@
 # PointLearn3D
 
-Procedural 3D scene simulation and PointNet-style point cloud learning for cuboids, cylinders, and spheres.
+[![CI](https://github.com/Geng-Li-1995/PointLearn3D/actions/workflows/ci.yml/badge.svg)](https://github.com/Geng-Li-1995/PointLearn3D/actions/workflows/ci.yml)
 
-This project provides an end-to-end, reproducible pipeline: synthetic geometry generation, dataset caching, single-shape classification, multi-object scene segmentation, Open3D interactive previews, and Matplotlib training-curve export.
+Procedural 3D scene simulation and PointNet-style point cloud learning for **cuboids**, **cylinders**, and **spheres**.
 
-**Author:** Dr. Geng Li
+An end-to-end pipeline: synthetic geometry → NPZ dataset cache → shape classification & scene segmentation → Open3D previews and training-curve plots. Configure everything in `config/input.py`, then run `python main.py`.
+
+**Author:** [Dr. Geng Li](https://github.com/Geng-Li-1995)
 
 ---
 
@@ -12,11 +14,11 @@ This project provides an end-to-end, reproducible pipeline: synthetic geometry g
 
 | Module | Description |
 |--------|-------------|
-| `simulation/generation.py` | Parametric primitive sampling, voxel collision checks, shape/scene generation |
-| `learning/datasets.py` | `ShapeDataset` / `SceneDataset` with NPZ disk cache and parallel preloading |
-| `learning/train.py` | `ShapeClassifier` (global classification), `SceneSegmenter` (per-point segmentation) |
-| `learning/visualize.py` | Open3D previews, PNG export, training curve plots |
-| `config/input.py` | Single configuration entry point: switches, hyperparameters, early stopping |
+| `simulation/generation.py` | Parametric primitives, voxel collision, `ShapeGenerator` / `SceneGenerator` |
+| `learning/datasets.py` | `ShapeDataset` / `SceneDataset` with NPZ cache and parallel preloading |
+| `learning/train.py` | `ShapeClassifier`, `SceneSegmenter`, early stopping, Ctrl+C checkpointing |
+| `learning/visualize.py` | Open3D previews, PNG export, training curves |
+| `config/input.py` | Switches, hyperparameters, and training stop criteria |
 
 ---
 
@@ -24,21 +26,20 @@ This project provides an end-to-end, reproducible pipeline: synthetic geometry g
 
 ```
 PointLearn3D/
-├── main.py                  # Entry: python main.py
+├── main.py
 ├── config/
 │   ├── input.py             # User-editable parameters
 │   └── config.py            # Paths, constants, run()
-├── simulation/
-│   └── generation.py
+├── simulation/generation.py
 ├── learning/
 │   ├── datasets.py
 │   ├── train.py
 │   ├── visualize.py
 │   └── plot_set.py
-├── data/                    # Dataset cache (git-ignored; see below)
-├── docs/images/             # Readme figure snapshots
-├── result/                  # Models, logs, visualization outputs
-├── tests/                   # pytest suite
+├── tests/                   # pytest (22 tests)
+├── .github/workflows/ci.yml # GitHub Actions
+├── data/                    # NPZ caches (git-ignored)
+├── result/                  # Models, logs, figures (see below)
 └── requirements.txt
 ```
 
@@ -46,79 +47,82 @@ PointLearn3D/
 
 ## Quick start
 
-**Requirements:** Python 3.10+. See `requirements.txt` (PyTorch, NumPy, Matplotlib, Open3D).
+**Requirements:** Python 3.10+ · PyTorch · NumPy · Matplotlib · Open3D (`requirements.txt`)
 
 ```bash
+git clone https://github.com/Geng-Li-1995/PointLearn3D.git
+cd PointLearn3D
 pip install -r requirements.txt
 python main.py
 ```
 
-All behavior is controlled in **`config/input.py`**. There is no CLI `--mode`. Typical workflow:
+Edit **`config/input.py`** before running. There is no CLI `--mode`.
 
-1. Enable `preview_shape` / `preview_scene` / `export_examples` as needed
-2. Set `prepare_data=True` to build caches under `data/shape/` and `data/scene/`
-3. Run `train_shape` / `train_scene` to write weights to `result/models/`
-4. Set `plot_training_curves=True` to save plots under `result/training/`
+| Step | Switch | Effect |
+|------|--------|--------|
+| 1 | `preview_shape` / `preview_scene` | Interactive Open3D windows |
+| 2 | `export_examples` | PNGs → `result/shape/`, `result/scene/` |
+| 3 | `prepare_data` | Build `data/shape/`, `data/scene/` caches |
+| 4 | `train_shape` / `train_scene` | Weights → `result/models/` |
+| 5 | `plot_training_curves` | Plots → `result/training/` |
 
-**Git:** Only generated NPZ files under `data/` are ignored. Models, images, and logs under `result/` can be committed normally.
+**Git:** only `data/*.npz` is ignored; `result/` outputs can be committed.
 
-### Tests
+### Tests & CI
 
 ```bash
-pip install -r requirements.txt
-pytest
+pytest          # local
+pytest -v tests/test_train.py
 ```
 
-Run a single file: `pytest tests/test_train.py -v`
-
-CI runs on GitHub Actions (`.github/workflows/ci.yml`) for Python 3.10–3.12 on every push/PR to `main`.
+[![CI](https://github.com/Geng-Li-1995/PointLearn3D/actions/workflows/ci.yml/badge.svg)](https://github.com/Geng-Li-1995/PointLearn3D/actions/workflows/ci.yml) runs on every push/PR to `main` / `master` (Ubuntu, Python 3.10–3.12). Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ---
 
 ## Visualizations
 
-Examples below come from `export_examples` and `plot_training_curves` (copies in `docs/images/`). Re-run `python main.py` to refresh outputs in `result/`.
+Figures below live under `result/` (from `export_examples` and `plot_training_curves`). Re-run `python main.py` to refresh.
 
 ### Single-shape point clouds
 
-Red = cuboid, green = cylinder, blue = sphere:
+Red = cuboid · Green = cylinder · Blue = sphere
 
 | Cuboid | Cylinder | Sphere |
 |:------:|:--------:|:------:|
-| ![cuboid](docs/images/cuboid.png) | ![cylinder](docs/images/cylinder.png) | ![sphere](docs/images/sphere.png) |
+| ![cuboid](result/shape/cuboid.png) | ![cylinder](result/shape/cylinder.png) | ![sphere](result/shape/sphere.png) |
 
 ### Multi-object scenes
 
-Voxel-grid collision-free placement; colors encode object class:
+Voxel-grid placement; color = object class
 
-| Scene 1 (12 objects) | Scene 2 |
-|:--------------------:|:-------:|
-| ![scene 1](docs/images/scene_01.png) | ![scene 2](docs/images/scene_02.png) |
+| Scene 1 | Scene 2 |
+|:-------:|:-------:|
+| ![scene 1](result/scene/scene_01.png) | ![scene 2](result/scene/scene_02.png) |
 
 ### Training curves
 
-**Shape classification** (~96% accuracy after early stopping):
+**Shape classification** — ~96% accuracy after early stopping:
 
-![shape training curves](docs/images/shape_curves.png)
+![shape training curves](result/training/shape_curves.png)
 
-**Scene segmentation** (baseline model; still needs improvement — see [Known limitations](#known-limitations)):
+**Scene segmentation** — baseline; still needs improvement ([limitations](#known-limitations)):
 
-![scene training curves](docs/images/scene_curves.png)
+![scene training curves](result/training/scene_curves.png)
 
 ---
 
-## Pipeline stages
+## Pipeline
 
-`run()` in `config/config.py` executes in order:
+`config/config.py` → `run()` executes in order:
 
-| Order | Switch | Action |
-|------:|--------|--------|
-| 1 | `preview_shape` | Open3D preview of all three shape types |
-| 2 | `preview_scene` | Open3D preview of `scene_preview_count` scenes |
-| 3 | `export_examples` | Export PNGs to `result/shape/`, `result/scene/` |
-| 4 | `prepare_data` | Build `data/` caches (respects `regen`) |
-| 5 | `train` | Train models → `result/models/` |
-| 6 | `plot_training_curves` | Plot curves → `result/training/` |
+| # | Switch | Action |
+|---|--------|--------|
+| 1 | `preview_shape` | Open3D: cuboid, cylinder, sphere |
+| 2 | `preview_scene` | Open3D: `scene_preview_count` scenes |
+| 3 | `export_examples` | PNG export |
+| 4 | `prepare_data` | NPZ cache build (`regen` to rebuild) |
+| 5 | `train` | Model training |
+| 6 | `plot_training_curves` | Loss / accuracy plots |
 
 ---
 
@@ -126,48 +130,48 @@ Voxel-grid collision-free placement; colors encode object class:
 
 ### Shape classification (`train_shape`)
 
-- **Input:** single-object point cloud, fixed point count
-- **Model:** `ShapeClassifier` (PointNet-style global max-pool + MLP)
-- **Weights:** `result/models/shape.pt`
-- **Log stage key:** `shape`
+| | |
+|---|---|
+| Input | Single-object point cloud |
+| Model | `ShapeClassifier` (PointNet-style global max-pool + MLP) |
+| Weights | `result/models/shape.pt` |
+| Log key | `shape` |
 
 ### Scene segmentation (`train_scene`)
 
-- **Input:** multi-object scene point cloud with per-point labels
-- **Model:** `SceneSegmenter` (per-point logits; trained independently from shape classification)
-- **Weights:** `result/models/scene.pt`
-- **Log stage key:** `scene`
+| | |
+|---|---|
+| Input | Multi-object scene, per-point labels |
+| Model | `SceneSegmenter` (independent weights) |
+| Weights | `result/models/scene.pt` |
+| Log key | `scene` |
 
-> **Work in progress.** `SceneSegmenter` is a lightweight baseline: global features are max-pooled at each block and broadcast to every point. It does not implement full local–global feature fusion (as in the original PointNet segmentation head) or stronger backbones (e.g. PointNet++). Segmentation accuracy on dense or overlapping scenes may be limited. Planned improvements: richer architecture, better sampling/normalization, and metrics beyond point-wise accuracy.
+> **Work in progress.** `SceneSegmenter` is a lightweight baseline (global max-pool + broadcast). No full local–global fusion or PointNet++-style backbone yet. Segmentation on crowded scenes may be weak.
 
-Metrics are appended to `result/training_log.json`. Curve plots use the latest run per stage.
+Metrics → `result/training_log.json` (latest run per stage used for plots).
 
 ---
 
 ## Scene generation
 
-`SceneGenerator` randomly places cuboids, cylinders, and spheres in a bounded volume. Overlap is checked with a **voxel grid** (`VoxelEngine`), not a KD-tree. Each object is resampled to a fixed point count and stored with its class label.
+`SceneGenerator` places random primitives in a bounded volume. Overlap checks use a **voxel grid** (`VoxelEngine`), not a KD-tree. Each object is resampled to a fixed point count with a class label.
 
 ---
 
-## Configuration
+## Configuration (`config/input.py`)
 
-Edit `config/input.py`:
-
-| Group | Key fields |
-|-------|------------|
+| Group | Fields |
+|-------|--------|
 | Switches | `regen`, `prepare_data`, `prepare_shape`, `prepare_scene`, `train`, `train_shape`, `train_scene`, `preview_*`, `export_examples`, `plot_training_curves` |
 | Dataset | `num_samples_shape`, `num_samples_scene`, `num_points_shape`, `num_points_scene`, `seed`, `cache`, `preload_workers` |
 | Training | `num_epochs_shape`, `num_epochs_scene`, `batch_size_shape`, `batch_size_scene`, `lr`, `weight_decay`, `num_workers`, `device` |
 | Early stop | `early_stop`, `early_stop_patience`, `early_stop_min_delta`, `target_accuracy` |
-| Preview / export | `scene_preview_count`, `scene_export_count` |
+| Preview | `scene_preview_count`, `scene_export_count` |
 
-**Notes**
-
-- `preload_workers=0` uses all CPU cores for parallel dataset preloading
-- `num_workers=0` lets DataLoader pick `cpu_count - 1`
-- If `prepare_data` and `train` run in the same invocation, training sets `regen=False` automatically to avoid rebuilding caches
-- **Ctrl+C** during training saves current weights and log before exiting
+- `preload_workers=0` → all CPU cores for preloading  
+- `num_workers=0` → DataLoader uses `cpu_count - 1`  
+- Same-run `prepare_data` + `train` → training skips rebuild (`regen=False`)  
+- **Ctrl+C** saves weights and log for the current epoch  
 
 ---
 
@@ -175,12 +179,12 @@ Edit `config/input.py`:
 
 | Path | Contents |
 |------|----------|
-| `data/shape/dataset.npz` | Shape training cache (git-ignored) |
-| `data/scene/dataset.npz` | Scene training cache (git-ignored) |
-| `result/models/shape.pt`, `scene.pt` | Model weights |
-| `result/training_log.json` | Per-epoch loss and accuracy |
-| `result/training/*_curves.png` | Training curve plots |
-| `result/shape/`, `result/scene/` | Exported example PNGs |
+| `data/shape/dataset.npz` | Shape cache (git-ignored) |
+| `data/scene/dataset.npz` | Scene cache (git-ignored) |
+| `result/models/shape.pt`, `scene.pt` | Weights |
+| `result/training_log.json` | Per-epoch metrics |
+| `result/training/*_curves.png` | Training curves |
+| `result/shape/`, `result/scene/` | Example PNGs |
 
 ---
 
@@ -188,22 +192,18 @@ Edit `config/input.py`:
 
 | Area | Status |
 |------|--------|
-| Shape classification | Stable baseline for single-primitive clouds |
-| Scene segmentation | **Needs optimization** — simplified model and training; limited accuracy on multi-object scenes |
-| Scene generation | Voxel placement only; no physics or realistic occlusion |
+| Shape classification | Stable baseline for single primitives |
+| Scene segmentation | **Needs optimization** |
+| Scene generation | Voxel placement; no physics or realistic occlusion |
 
 ---
 
 ## Author
 
-**Dr. Geng Li**
-
-Background in theoretical physics and computational high-energy physics (lattice QCD). Research interests include scientific computing, HPC, and machine learning on structured data.
-
-For collaboration, citation, or further information, please contact the author via the repository contact details.
+**Dr. Geng Li** — theoretical physics & lattice QCD background; scientific computing, HPC, and ML on structured data.
 
 ---
 
 ## License
 
-Not specified. Contact the maintainer before redistribution.
+No license specified. Contact the author before redistribution or commercial use.
