@@ -14,17 +14,17 @@ Scene recognition now runs as a layered pipeline: DBSCAN first groups separated 
 
 ## Results
 
-Run `export_examples` and `plot_training_curves` in `config/input.py`, then `python main.py`. Figures are saved under `result/`.
+Run `export_examples` and `plot_training_curves` in `config/input.py`, then `python main.py`. Figures are saved under `result/`, and this README embeds those generated files directly instead of keeping a separate copy of the images.
 
 Latest run, default dataset scale, Apple MPS:
 
 | Stage | Result |
 |-------|--------|
-| Shape classification | Best accuracy `0.9840` at epoch 4; early-stopped after 5 epochs without improvement |
-| Scene segmentation | Best accuracy `0.9719` at epoch 19; completed 20 epochs |
-| Layered scene recognition | 3 exported scenes; point accuracy `0.8186`, `0.8369`, `0.8276`; detected 17, 10, 11 instances |
+| Shape classification | Best accuracy `0.9913` at epoch 7; early-stopped after 5 epochs without improvement |
+| Scene segmentation | Best accuracy `0.9784` at epoch 19; completed 20 epochs |
+| Layered scene recognition | 3 exported scenes; point accuracy `0.9768`, `0.8364`, `0.7920`; detected 17, 11, 19 instances |
 
-| Single shapes (class color) | Multi-object scenes (voxel placement) |
+| Single shapes (class color) | Multi-object scenes (footprint + voxel placement) |
 |:---:|:---:|
 | Red · cuboid &nbsp; Green · cylinder &nbsp; Blue · sphere | One PNG per scene; labels match shape classes |
 
@@ -44,11 +44,11 @@ Latest run, default dataset scale, Apple MPS:
 
 In the predicted-class view, **red = cuboid**, **green = cylinder**, **blue = sphere**, and gray means the point was not assigned to any recognized instance. In the instance-id view, each color is one DBSCAN cluster; colors do not represent shape classes. If one object has multiple colors, it was over-split. If two objects share one color, they were merged.
 
-**Shape classification** — early-stopped run, 98.40% best accuracy:
+**Shape classification** — early-stopped run, 99.13% best accuracy:
 
 ![shape curves](result/training/shape_curves.png)
 
-**Scene segmentation** — KNN local features + global context, 97.19% best accuracy ([limitations](#limitations)):
+**Scene segmentation** — KNN local features + global context, 97.84% best accuracy ([limitations](#limitations)):
 
 ![scene curves](result/training/scene_curves.png)
 
@@ -118,7 +118,7 @@ If `prepare_data` and `train` run in the same invocation, training automatically
 
 ### Simulation
 
-`simulation/generation.py` samples **cuboid**, **cylinder**, and **sphere** surfaces, applies random rigid transforms, and places objects with a **voxel grid** (`VoxelEngine`) for overlap checks — not a KD-tree.
+`simulation/generation.py` samples **cuboid**, **cylinder**, and **sphere** surfaces, applies random rigid transforms, and places objects with a two-stage overlap check: XY footprint clearance first, then surface voxel occupancy (`VoxelEngine`) as a fallback — not a KD-tree.
 
 - **`ShapeGenerator`** — one primitive per sample, global class label  
 - **`SceneGenerator`** — ~12 objects per scene, per-point segmentation labels  
@@ -145,7 +145,7 @@ Values below match **`config/input.py`** out of the box. Override any field befo
 |---|-------|-------|
 | Geometry | 1 random cuboid, cylinder, or sphere | ~12 objects (3–5 cuboids, 3–5 cylinders, remainder spheres) |
 | Raw points / object | resampled to 1,024 | ~600 surface points / object, merged then resampled to 4,096 |
-| Placement | Random SE(3) transform | Voxel collision-free layout in \(x,y \in [-10,10]\), \(z \in [-0.1,0.1]\) |
+| Placement | Random SE(3) transform | Footprint-clearance + voxel-checked layout in \(x,y \in [-10,10]\), \(z \in [-0.1,0.1]\) |
 | Class balance | Uniform over 3 shapes | Per-point labels from object type |
 
 **Training throughput (defaults, cached data)**
@@ -190,7 +190,9 @@ Outputs are saved under `result/recognition/`:
 
 This layered path is usually more reasonable for these synthetic scenes than asking a single per-point model to solve everything at once: first split objects, then classify each object, then estimate its geometry. The scene segmenter remains useful as a per-point baseline and for learning local context, but the recognition output is easier to inspect because it produces object instances and fitted parameters.
 
-The recognition accuracy can be lower than scene segmentation accuracy because the first step is geometric clustering. In the latest run, `scene_01` produced 17 detected instances for a 12-object scene, which indicates DBSCAN over-splitting. Tune `recognition_cluster_eps` upward when objects are split too much, or downward when nearby objects merge.
+The latest training results are reasonable: both learned models converge well, with shape classification at `0.9913` and scene segmentation at `0.9784`. The remaining instability is in layered recognition, not in the segmenter. Recognition accuracy can be lower than scene segmentation accuracy because the first step is geometric clustering. In the latest run, `scene_01` and `scene_03` produced 17 and 19 detected instances for 12-object scenes, which indicates DBSCAN over-splitting. Tune `recognition_cluster_eps` upward when objects are split too much, or downward when nearby objects merge.
+
+The next best optimization is to make recognition segmenter-guided: run `SceneSegmenter` first, cluster points within each predicted class, merge nearby same-class fragments, then fit geometry. This uses the strong per-point model to stabilize DBSCAN instead of clustering blindly from raw coordinates.
 
 Training supports **result-driven early stopping**: each epoch is judged by accuracy improvement, with loss improvement as a tie-breaker when accuracy is flat. The saved `*.pt` file uses the best epoch weights, not merely the final epoch. Metrics append to `result/training_log.json`; plots use the latest entry per stage. Ctrl+C still saves available progress.
 
@@ -320,7 +322,7 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs `pytest` on Ubu
 | Shape classification | Stable baseline for single-primitive clouds |
 | Scene segmentation | KNN local edge features + global context; still CPU-heavy for large point counts |
 | Scene recognition | DBSCAN instance grouping works best for separated objects; close objects may split or merge |
-| Scene generation | Voxel-grid placement only; no physics, occlusion, or sensor noise |
+| Scene generation | Footprint-clearance + voxel occupancy placement; no physics, occlusion, or sensor noise |
 
 ---
 

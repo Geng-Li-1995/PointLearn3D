@@ -187,27 +187,55 @@ class SceneObject:
     points: np.ndarray
     label: int
     obj_type: str = "unknown"
+    center: np.ndarray | None = None
+    footprint_radius: float = 0.0
 
 
 class VoxelEngine:
-    """Coarse voxel grid for non-overlapping object placement."""
+    """Coarse occupancy and footprint checks for non-overlapping placement."""
 
-    def __init__(self, voxel_size: float = 0.05):
+    def __init__(self, voxel_size: float = 0.05, clearance: float = 0.2):
         self.voxel_size = voxel_size
+        self.clearance = clearance
         self.occupied: set[tuple[int, ...]] = set()
+        self.footprints: list[tuple[np.ndarray, float]] = []
 
     def _unique_keys(self, points: np.ndarray) -> set[tuple[int, ...]]:
         voxels = np.floor(points / self.voxel_size).astype(np.int32)
         return {tuple(v) for v in np.unique(voxels, axis=0)}
 
-    def query_collision(self, points: np.ndarray) -> bool:
+    def _query_footprint_collision(self, center: np.ndarray, radius: float) -> bool:
+        center_xy = center[:2]
+        for placed_center_xy, placed_radius in self.footprints:
+            min_distance = radius + placed_radius + self.clearance
+            if np.linalg.norm(center_xy - placed_center_xy) < min_distance:
+                return True
+        return False
+
+    def query_collision(
+        self,
+        points: np.ndarray,
+        center: np.ndarray | None = None,
+        footprint_radius: float | None = None,
+    ) -> bool:
+        if center is not None and footprint_radius is not None:
+            if self._query_footprint_collision(center, footprint_radius):
+                return True
         return bool(self._unique_keys(points) & self.occupied)
 
-    def add_object(self, points: np.ndarray) -> None:
+    def add_object(
+        self,
+        points: np.ndarray,
+        center: np.ndarray | None = None,
+        footprint_radius: float | None = None,
+    ) -> None:
         self.occupied.update(self._unique_keys(points))
+        if center is not None and footprint_radius is not None:
+            self.footprints.append((center[:2].astype(np.float32), float(footprint_radius)))
 
     def reset(self) -> None:
         self.occupied.clear()
+        self.footprints.clear()
 
 
 @dataclass
@@ -225,15 +253,16 @@ class SceneGenerator:
 
     def __init__(
         self,
-        max_attempts: int = 30,
+        max_attempts: int = 200,
         voxel_size: float = 0.05,
+        clearance: float = 0.2,
         bounds: tuple = ((-10, -10, -0.1), (10, 10, 0.1)),
         scene_config: SceneGenerationConfig | None = None,
     ):
         self.max_attempts = max_attempts
         self.bounds = bounds
         self.scene_config = scene_config or SceneGenerationConfig()
-        self.engine = VoxelEngine(voxel_size=voxel_size)
+        self.engine = VoxelEngine(voxel_size=voxel_size, clearance=clearance)
         self.objects: list[SceneObject] = []
 
     def _random_pose(self) -> tuple[np.ndarray, float, float]:
@@ -245,9 +274,10 @@ class SceneGenerator:
         for _ in range(self.max_attempts):
             translation, yaw, tilt = self._random_pose()
             transformed = transform_point_cloud(points, translation=translation, yaw=yaw, tilt=tilt)
-            if not self.engine.query_collision(transformed):
-                self.engine.add_object(transformed)
-                self.objects.append(SceneObject(transformed, label, obj_type))
+            footprint_radius = float(np.max(np.linalg.norm(transformed[:, :2] - translation[:2], axis=1)))
+            if not self.engine.query_collision(transformed, translation, footprint_radius):
+                self.engine.add_object(transformed, translation, footprint_radius)
+                self.objects.append(SceneObject(transformed, label, obj_type, translation, footprint_radius))
                 return True
         return False
 
@@ -258,8 +288,8 @@ class SceneGenerator:
     def generate_scene(self) -> list[SceneObject]:
         self.reset()
         cfg = self.scene_config
-        n_cubes = np.random.randint(cfg.min_cubes, cfg.max_cubes)
-        n_cyl = np.random.randint(cfg.min_cubes, cfg.max_cubes)
+        n_cubes = np.random.randint(cfg.min_cubes, cfg.max_cubes + 1)
+        n_cyl = np.random.randint(cfg.min_cubes, cfg.max_cubes + 1)
         n_sph = cfg.total_objects - n_cubes - n_cyl
 
         for _ in range(n_cubes):

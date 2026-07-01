@@ -5,6 +5,3 @@ data/*
 # Python runtime/cache files
 __pycache__/
 *.py[cod]
-
-# Generated recognition exports
-result/recognition/

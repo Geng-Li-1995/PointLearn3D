@@ -36,6 +36,18 @@ def test_scene_generator_places_objects():
         assert 0 <= obj.label < NUM_SHAPE_CLASSES
 
 
+def test_scene_generator_footprints_do_not_overlap():
+    np.random.seed(123)
+    gen = SceneGenerator(clearance=0.2)
+    objects = gen.generate_scene()
+    assert len(objects) == gen.scene_config.total_objects
+    for i, obj_a in enumerate(objects):
+        for obj_b in objects[i + 1:]:
+            distance = np.linalg.norm(obj_a.center[:2] - obj_b.center[:2])
+            min_distance = obj_a.footprint_radius + obj_b.footprint_radius + gen.engine.clearance
+            assert distance >= min_distance
+
+
 def test_scene_objects_to_arrays():
     objects = SceneGenerator().generate_scene()
     points, labels = scene_objects_to_arrays(objects)
