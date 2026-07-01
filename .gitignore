@@ -1,3 +1,10 @@
 # Generated dataset caches (data/shape/, data/scene/)
 data/*
 !data/.gitkeep
+
+# Python runtime/cache files
+__pycache__/
+*.py[cod]
+
+# Generated recognition exports
+result/recognition/
